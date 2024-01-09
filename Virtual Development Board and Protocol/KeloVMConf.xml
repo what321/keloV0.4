@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<configure>
+    <rs232Port1>COM2</rs232Port1>
+    <rs232Baud1>9600</rs232Baud1>
+    <rs232Port2>COM2</rs232Port2>
+    <rs232Baud2>9600</rs232Baud2>
+    <rs485Port>COM2</rs485Port>
+    <rs485Baud>9600</rs485Baud>
+    <serverIp>127.0.0.1</serverIp>
+    <serverPort>1883</serverPort>
+    <companyCode>001</companyCode>
+    <deviceCode>001</deviceCode>
+    <unit>kg</unit>
+    <deviceId>01</deviceId>
+    <materialId>1</materialId>
+    <weightLow>5</weightLow>
+    <weightHigh>50</weightHigh>
+    <parameter1>3</parameter1>
+    <parameter2>50</parameter2>
+    <parameter3>80</parameter3>
+    <countZero>8383525</countZero>
+    <countW>8393</countW>
+    <guid>A68B6C06B5609D305E141697</guid>
+</configure>

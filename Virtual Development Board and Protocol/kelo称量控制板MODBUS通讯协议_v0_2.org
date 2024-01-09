@@ -1,0 +1,156 @@
+#+LATEX_HEADER: \usepackage{xeCJK}
+#+LATEX_HEADER: \setCJKmainfonts{SimSun}
+#+OPTIONS: \n:t
+* kelo称量控制板BODBUS通讯协议
+
+** 历史
+  版本 v0.1
+完成MODBUS协议设计
+
+** 协议说明
+  version v0.2
+协议应用于称量控制板与上位机(工控机/网关)串口通信
+
+通信使用kelo板RS232串口/RS485串口（kelo作为MODBUS从机）
+
+命令总是由工控机发出，称重板收到后响应并回应答，遵循MODBUS协议
+端口配置波特率9600、1位起始位、8位数据位、2位停止位、无校验、无流控
+
+数据包中寄存器地址、寄存器数量、CRC16校验码采用大端模式；模拟量、重量采用小端模式。
+
+
+
+** 校验算法
+#+begin_src c
+    //Modbus-CRC校验-----计算法
+    uint16_t GetModbusCRC16_Cal(uint8_t *data, uint32_t len)
+    {
+      uint8_t temp;
+      uint16_t wcrc = 0XFFFF; // 16位crc寄存器预置
+      uint32_t i = 0, j = 0; // 计数
+
+      for (i = 0; i < len; i++) { // 循环计算每个数据
+	temp = data[i] & 0X00FF; // 将八位数据与crc寄存器异或
+	wcrc ^= temp; // 将数据存入crc寄存器
+	// 循环计算数据
+	for (j = 0; j < 8; j++) {
+	  if (wcrc & 0X0001) {
+	    // 判断右移出的是1则与多项式进行异或
+	    wcrc >>= 1; 
+	    wcrc ^= 0XA001; 
+	  }
+	  else {
+	    // 如果不是1，则直接移出
+	    wcrc >>= 1;
+	  }
+	}
+      }
+      return ((wcrc << 8)|(wcrc>>8));//高低位置换
+    }
+#+end_src
+
+** 功能码
+
+*** 0x01   读入4路输出端口状态
+       输出状态寄存器地址00000~00003(0x0000~0x0003)
+       
+       cmd: 01 01 00 00 00 04 3D C9      
+       ret: 01 01 01 00 51 88
+       
+*** 0x02   读入4路输入端口 状态
+       输入状态寄存器地址10000~10003(0x2710~0x2713)
+       
+       cmd: 01 02 27 10 00 04 72 B8
+       ret: 01 02 01 00 a1 88
+       
+*** 0x04   读入称重值
+       称重值寄存器30008~30009(0x7538~0x7539)      
+       weight地址30008~30009(0x7538~0x7539) 4字节 (little模式 0x12345678 放入连续的两个寄存器4字节 为 78 56 34 12)   
+       读取weight值（每个值占两个寄存器，每个寄存器2字节）
+  
+       cmd: 01 04 75 38 00 02 EA 0A
+       ret: 01 04 04 00 00 00 00 fb 84
+       
+*** 0x05   设置单路输出端口状态
+       输出状态寄存器地址00000~00003(0x0000~0x0003)
+       FF 00 请求输出为 ON （输出低电平驱动继电器吸合）
+       00 00 请求输出为 OFF（继电器断开）
+
+       cmd: 01 05 00 00 FF 00 8C 3A
+       ret: 01 05 00 00 ff 00 8c 3a
+       
+       cmd: 01 05 00 00 00 00 CD CA
+       ret: 01 05 00 00 00 00 cd ca
+       
+       cmd: 01 05 00 03 FF 00 7C 3A
+       ret: 01 05 00 03 ff 00 7c 3a
+       
+*** 0x0F   设置多路输出端口状态
+       输出状态寄存器地址00000~00003(0x0000~0x0003)
+       
+       cmd: 01 0F 00 00 00 03 01 05 4F 54 
+       ret: 01 0f 00 00 00 03 15 ca
+
+*** 0x41   获取状态(4输入端口，4路输出端口，重量值)
+       命令  01 41 MM NN
+       返回  01 41 XX YY GG GG GG GG HH HH HH HH II II II II JJ JJ JJ JJ KK KK KK KK MM NN
+       
+       XX: 8路输入; YY: 8路输出; (XX为 DI0~DI7; YY为DO0~DO7)
+       GG GG GG GG HH HH HH HH II II II II JJ JJ JJ JJ 四路模拟量数据，每路4字节
+       KK KK KK KK: 重量输入; (little模式 0x12345678 放入KK KK KK KK 为 78 56 34 12)
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+            
+       cmd: 01 41 C0 10
+       ret: 01 41 00 a5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f1 a0 00 08 00 2a
+
+       cmd: 01 41 C0 10
+       ret: 01 41 00 a5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 64 00 00 00 2c 02
+       
+       
+*** 0x42   去皮指令
+       命令 01 42 XX MM NN
+       
+       XX: 延迟时间(秒)
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+       
+       cmd: 01 42 01 D1 60
+       ret: 01 42 01 d1 60
+           
+*** 0x43   标定指令
+       命令 01 43 XX KK KK KK KK MM NN
+       
+       XX: 延迟时间(秒)    
+       KK KK KK KK: 标定重量 (little模式 0x12345678 放入KK KK KK KK 为 78 56 34 12)
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+       
+       cmd: 01 43 05 00 00 00 00 C9 33
+       ret: 01 43 05 00 00 00 00 c9 33    
+       
+       cmd: 01 43 05 E8 03 00 00 0C 93
+       ret: 01 43 05 e8 03 00 00 0c 93
+               
+*** 0x44   获取GUID
+       命令 01 44 MM NN
+       
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+       返回 01 44 XX XX XX XX XX XX XX XX XX XX XX XX MM NN
+       XX ... XX: 12字节GUID
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+           
+       cmd: 01 44 00 13 
+       ret: 01 44 30 ff d5 05 50 46 39 38 22 53 11 ca f3  
+       
+*** 0x45   获取version
+       命令 01 45 MM NN
+       
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+       返回 01 45 XX YY ... YY MM NN
+       XX: 版本号字节数
+       YY ... YY: 版本号字符串
+       MM NN: CRC校验  (big模式 0x1234 放入 MM NN 为 12 34)
+           
+      cmd: 01 45 C1 D3
+      ret: 01 45 09 6c 65 6e 73 20 76 30 2e 33 74 06
+      
+          
+
