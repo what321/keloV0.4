@@ -19,4 +19,4 @@ disc:  用于物联网现场网关，连接kelo称量控制板和隔离控制器
 	开启虚拟串口，右键虚拟开发板，设置串口号与波特率。GUI界面点击工具栏的第二项，配置串口，设置与虚拟开发板连接的串口号与波特率，点击工具栏的第一项打开串口即可。
 
 
-If you have any questions, please contact email: muqi9100@gmail.com
+If you have any question, please contact email: muqi9100@gmail.com
